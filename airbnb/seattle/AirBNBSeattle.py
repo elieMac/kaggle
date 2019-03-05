@@ -39,8 +39,21 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import cross_val_score
-%matplotlib inline
 #------------------------------------------------------------------------------
+#%%
+from IPython.core.interactiveshell import InteractiveShell
+InteractiveShell.ast_node_interactivity = "all"
+
+#%% [markdown]
+## Helper functions
+#%%
+def remove_dollar(data):
+    data = data.apply(str)
+    data = [float(x.strip('$').replace(',','')) for x in data]
+    return data
+
+def convert_boolstr(data):
+    return data.map(dict(t=1, f=0))
 
 #%% [markdown]
 ## Data Engineering
@@ -52,78 +65,95 @@ reviews = pd.read_csv('reviews.csv')
 #%%[markdown]
 ### Check if there is null data
 
-#%%
+#%% [markdown]
+### Calendar
+
+#%% 
 print(calendar.shape)
 calendar.isnull().sum()
+calendar.head()
 
+#%%
+# Formating calendar data to be useful
+calendar.price = remove_dollar(calendar.price)
+calendar.available = convert_boolstr(calendar.available)
+calendar.head()
+
+#%% [markdown]
+### Listings
 #%%
 print(listings.shape)
 listings.isnull().sum()
+listings.head()
 
 #%%
-listings_num = []
-for column in listings.columns:
-  if listings[column].dtype in ['int64','float64']:
-      listings_num.append(column);
-
-listings_numerical = listings[listings_num];
-listings_numerical.describe()
-
-# Scrape Id as a null std, check if any other data is useless/corrupted
-null_std= []
-for column in listings_numerical.columns:
-    if 0 == listings_numerical[column].std():
-        null_std.append(column);
-    elif math.isnan(listings_numerical[column].std()):
-        null_std.append(column);
-    elif listings_numerical[column].min() == listings_numerical[column].max():
-        null_std.append(column);
-
-for element in null_std:
-    listings_num.remove(element);
-
-listings_numerical = listings[listings_num];
-listings_numerical.describe()
+# Formating listings data to be useful
+# Checking if data has variance
+for column in listings.columns.values:
+    print("-{}- unique values: {}".format(column,len(listings[column].unique())))
 
 #%%
-listings_numerical.head(3)
+# Removing uselss data
+for column in listings.columns.values:
+    if len(listings[column].unique()) == 1:
+        listings = listings.drop(column,axis=1)
+        print("Removed ",column)
+
+listings.shape
+listings.describe()
 
 #%%
-listings_categorical = listings[listings.columns.difference(listings_num)]
-listings_categorical.head(3)
+# Converting bool and removing dollars
+boolean_str =['host_has_profile_pic','host_identity_verified','is_location_exact','instant_bookable',
+              'require_guest_profile_picture','require_guest_phone_verification']
+prices = ['price','weekly_price','monthly_price','security_deposit','cleaning_fee','extra_people']
+for column in boolean_str:
+    listings[column] = convert_boolstr(listings[column])
+
+for column in prices:
+    listings[column] = remove_dollar(listings[column])
 
 #%%
-listings_categorical = listings_categorical[listings_categorical.columns.difference(['country','country_code','city','smart_location','state','calendar_last_scraped','scrape_id'])];
-listings_categorical.head(3)
+# Display
+listings.head(10)
+
+#%% [markdown]
+### Reviews
+#%%
+print(reviews.shape)
+reviews.isnull().sum()
+reviews.head()
 
 #%% [markdown]
 ## Data Understanding
 #%%
 # Compute the correlation matrix
+numeric_fields = []
+for column in listings.columns.values:
+    if listings[column].dtype in ['int64','float64']:
+        numeric_fields.append(column)
+
+listings_numerical = listings[numeric_fields]
 corr = listings_numerical.corr()
 
 #%%
-# Generate a mask for the upper triangle
-#mask = np.zeros_like(corr, dtype=np.bool)
-#mask[np.triu_indices_from(mask)] = True
-
 # Set up the matplotlib figure
-f, ax = plt.subplots(figsize=(15, 15))
+f, ax = plt.subplots(figsize=(15, 15));
+ax.tick_params(axis='x', colors='white');
+ax.tick_params(axis='y', colors='white');
 
 # Generate a custom diverging colormap
 cmap = sns.diverging_palette(220, 10, as_cmap=True)
 
 # Draw the heatmap with the mask and correct aspect ratio
 hm = sns.heatmap(corr, cmap=cmap, vmax=.3, center=0,
-            square=True, linewidths=.5, cbar_kws={"shrink": .5});
+                 square=True, linewidths=.5, cbar_kws={"shrink": .5});
 hm.set_xticklabels(labels=hm.get_xticklabels(),rotation=75);
+cb = hm.collections[0].colorbar
+cb.ax.tick_params(axis='y', colors='white');
 
+## Classification
 #%% [markdown]
-
-##%%
-print(reviews.shape)
-reviews.isnull().sum()
-
 #
 ##%%
 #def get_month(date):
